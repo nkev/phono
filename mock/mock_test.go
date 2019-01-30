@@ -6,19 +6,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dudk/phono"
-	"github.com/dudk/phono/mock"
-	"github.com/dudk/phono/pipe"
+	"github.com/pipelined/phono/mock"
+	"github.com/pipelined/phono/pipe"
 )
 
 var (
 	tests = []struct {
-		phono.BufferSize
-		phono.NumChannels
+		BufferSize  int
+		NumChannels int
 		mock.Limit
 		value    float64
-		messages int64
-		samples  int64
+		messages int
+		samples  int
 	}{
 		{
 			NumChannels: 1,
@@ -35,18 +34,18 @@ var (
 			samples:     1000,
 		},
 	}
-	bufferSize = phono.BufferSize(10)
-	sampleRate = phono.SampleRate(10)
+	bufferSize = 10
+	sampleRate = 10
 )
 
 func TestPipe(t *testing.T) {
 	pump := &mock.Pump{
-		UID:        phono.NewUID(),
+		// UID:        phono.NewUID(),
 		Limit:      1,
 		BufferSize: bufferSize,
 	}
-	processor := &mock.Processor{UID: phono.NewUID()}
-	sink := &mock.Sink{UID: phono.NewUID()}
+	processor := &mock.Processor{}
+	sink := &mock.Sink{}
 	p, err := pipe.New(
 		sampleRate,
 		pipe.WithName("Mock"),
@@ -57,7 +56,7 @@ func TestPipe(t *testing.T) {
 	assert.Nil(t, err)
 
 	for _, test := range tests {
-		p.Push(
+		p.Push(pump,
 			pump.LimitParam(test.Limit),
 			pump.NumChannelsParam(test.NumChannels),
 			pump.ValueParam(test.value),
@@ -78,22 +77,21 @@ func TestPipe(t *testing.T) {
 		assert.Equal(t, test.samples, samplesCount)
 
 		assert.Equal(t, test.NumChannels, sink.Buffer.NumChannels())
-		assert.Equal(t, phono.BufferSize(test.samples), sink.Buffer.Size())
+		assert.Equal(t, test.samples, sink.Buffer.Size())
 	}
 }
 
 func TestComponentsReuse(t *testing.T) {
 	pump := &mock.Pump{
-		UID:         phono.NewUID(),
 		Limit:       5,
 		Interval:    10 * time.Microsecond,
 		BufferSize:  10,
 		NumChannels: 1,
 	}
-	proc1 := &mock.Processor{UID: phono.NewUID()}
-	proc2 := &mock.Processor{UID: phono.NewUID()}
-	sink1 := &mock.Sink{UID: phono.NewUID()}
-	sink2 := &mock.Sink{UID: phono.NewUID()}
+	proc1 := &mock.Processor{}
+	proc2 := &mock.Processor{}
+	sink1 := &mock.Sink{}
+	sink2 := &mock.Sink{}
 
 	p, err := pipe.New(
 		sampleRate,

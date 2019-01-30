@@ -3,21 +3,21 @@ package asset_test
 import (
 	"testing"
 
-	"github.com/dudk/phono"
-	"github.com/dudk/phono/asset"
-	"github.com/dudk/phono/mock"
-	"github.com/dudk/phono/pipe"
+	"github.com/pipelined/phono"
+	"github.com/pipelined/phono/asset"
+	"github.com/pipelined/phono/mock"
+	"github.com/pipelined/phono/pipe"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
 	tests = []struct {
-		phono.BufferSize
-		phono.NumChannels
+		BufferSize  int
+		NumChannels int
 		mock.Limit
 		value    float64
-		messages int64
-		samples  int64
+		messages int
+		samples  int
 	}{
 		{
 			NumChannels: 1,
@@ -34,18 +34,17 @@ var (
 			samples:     1000,
 		},
 	}
-	bufferSize = phono.BufferSize(10)
+	bufferSize = 10
 )
 
 func TestPipe(t *testing.T) {
 	for _, test := range tests {
 		pump := &mock.Pump{
-			UID:        phono.NewUID(),
 			Limit:      1,
 			BufferSize: bufferSize,
 		}
-		processor := &mock.Processor{UID: phono.NewUID()}
-		sampleRate := phono.SampleRate(44100)
+		processor := &mock.Processor{}
+		sampleRate := 44100
 		sink := asset.New()
 		p, err := pipe.New(
 			sampleRate,
@@ -56,6 +55,7 @@ func TestPipe(t *testing.T) {
 		)
 		assert.Nil(t, err)
 		p.Push(
+			pump,
 			pump.LimitParam(test.Limit),
 			pump.NumChannelsParam(test.NumChannels),
 			pump.ValueParam(test.value),
@@ -72,7 +72,7 @@ func TestPipe(t *testing.T) {
 		assert.Equal(t, test.samples, samplesCount)
 
 		assert.Equal(t, test.NumChannels, sink.Buffer.NumChannels())
-		assert.Equal(t, phono.BufferSize(test.samples), sink.Buffer.Size())
+		assert.Equal(t, test.samples, sink.Buffer.Size())
 
 		for i := range sink.Buffer {
 			for j := range sink.Buffer[i] {
@@ -82,7 +82,5 @@ func TestPipe(t *testing.T) {
 		err = pipe.Wait(p.Run())
 		assert.NotNil(t, err)
 		assert.Equal(t, phono.ErrSingleUseReused, err)
-		// err = pipe.Wait(p.Close())
-		// assert.Nil(t, err)
 	}
 }

@@ -5,22 +5,22 @@ import (
 	"io"
 	"os"
 
-	"github.com/dudk/phono"
+	"github.com/pipelined/phono"
 
-	"github.com/hajimehoshi/go-mp3"
+	mp3 "github.com/hajimehoshi/go-mp3"
 )
 
 // Pump allows to read mp3 files.
 type Pump struct {
-	phono.UID
-	f          *os.File
-	d          *mp3.Decoder
-	bufferSize phono.BufferSize
-	done       bool
+	bufferSize  int
+	numChannels int
+	f           *os.File
+	d           *mp3.Decoder
 }
 
 // NewPump creates new mp3 Pump.
-func NewPump(path string, bufferSize phono.BufferSize) (*Pump, error) {
+// NOTE: current decoder always provides stereo, so return constant.
+func NewPump(path string, bufferSize int) (*Pump, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -32,37 +32,41 @@ func NewPump(path string, bufferSize phono.BufferSize) (*Pump, error) {
 	}
 
 	return &Pump{
-		d:          d,
-		f:          f,
-		UID:        phono.NewUID(),
-		bufferSize: bufferSize,
+		d:           d,
+		f:           f,
+		bufferSize:  bufferSize,
+		numChannels: 2,
 	}, nil
 }
 
 // Pump reads buffer from mp3.
-func (p *Pump) Pump(string) (phono.PumpFunc, error) {
+func (p *Pump) Pump(string) (func() (phono.Buffer, error), error) {
 	return func() (phono.Buffer, error) {
-		if p.done {
-			return nil, phono.ErrEOP
-		}
+		capacity := p.bufferSize * p.numChannels
+		ints := make([]int, 0, capacity)
 
-		ints := make([]int, 0, int(p.bufferSize)*2)
 		var val int16
-		for len(ints) < int(p.bufferSize)*2 && !p.done {
-			if err := binary.Read(p.d, binary.LittleEndian, &val); err != nil {
-				if err == io.EOF {
-					p.done = true
-				} else {
+		for len(ints) < capacity {
+			if err := binary.Read(p.d, binary.LittleEndian, &val); err != nil { // read next frame
+				if err == io.EOF { // no bytes available
+					if len(ints) == 0 {
+						return nil, io.EOF
+					}
+					break
+				} else { // error happened
 					return nil, err
 				}
+			} else {
+				ints = append(ints, int(val)) // append data
 			}
-			ints = append(ints, int(val))
 		}
-		if len(ints)%2 == 1 {
-			ints = append(ints, 0)
-		}
-		b := phono.EmptyBuffer(2, phono.BufferSize(len(ints)))
+
+		b := phono.EmptyBuffer(p.numChannels, len(ints)/p.numChannels)
 		b.ReadInts(ints)
+		// read not enough samples
+		if b.Size() != p.bufferSize {
+			return b, io.ErrUnexpectedEOF
+		}
 		return b, nil
 	}, nil
 }
@@ -73,15 +77,17 @@ func (p *Pump) Flush(string) error {
 }
 
 // SampleRate returns sample rate of decoded file.
-func (p *Pump) SampleRate() phono.SampleRate {
+func (p *Pump) SampleRate() int {
 	if p == nil || p.d == nil {
 		return 0
 	}
-	return phono.SampleRate(p.d.SampleRate())
+	return p.d.SampleRate()
 }
 
 // NumChannels returns number of channels.
-// NOTE: current decoder always provides stereo, so return constant.
-func (p *Pump) NumChannels() phono.NumChannels {
-	return 2
+func (p *Pump) NumChannels() int {
+	if p == nil {
+		return 0
+	}
+	return p.numChannels
 }

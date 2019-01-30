@@ -1,18 +1,18 @@
 package mixer
 
 import (
+	"io"
 	"sync/atomic"
 
-	"github.com/dudk/phono"
-	"github.com/dudk/phono/log"
+	"github.com/pipelined/phono"
+	"github.com/pipelined/phono/log"
 )
 
 // Mixer summs up multiple channels of messages into a single channel.
 type Mixer struct {
-	phono.UID
 	log.Logger
-	numChannels phono.NumChannels
-	bufferSize  phono.BufferSize
+	numChannels int
+	bufferSize  int
 	out         chan *frame       // channel to send frames ready for mix
 	in          chan *inMessage   // channel to send incoming messages
 	frames      map[string]*frame // frames sinking data
@@ -36,7 +36,7 @@ type frame struct {
 }
 
 // sum returns mixed samplein.
-func (f *frame) sum(numChannels phono.NumChannels, bufferSize phono.BufferSize) phono.Buffer {
+func (f *frame) sum(numChannels int, bufferSize int) phono.Buffer {
 	var sum float64
 	var frames float64
 	result := phono.Buffer(make([][]float64, numChannels))
@@ -62,13 +62,12 @@ const (
 )
 
 // New returns new mixer.
-func New(bs phono.BufferSize, nc phono.NumChannels) *Mixer {
+func New(bufferSize int, numChannels int) *Mixer {
 	m := &Mixer{
-		UID:         phono.NewUID(),
 		Logger:      log.GetLogger(),
 		frames:      make(map[string]*frame),
-		numChannels: nc,
-		bufferSize:  bs,
+		numChannels: numChannels,
+		bufferSize:  bufferSize,
 		in:          make(chan *inMessage, 1),
 		register:    make(chan string, maxInputs),
 		cancel:      make(chan struct{}),
@@ -77,14 +76,14 @@ func New(bs phono.BufferSize, nc phono.NumChannels) *Mixer {
 }
 
 // Sink registers new input.
-func (m *Mixer) Sink(inputID string) (phono.SinkFunc, error) {
+func (m *Mixer) Sink(inputID string) (func(phono.Buffer) error, error) {
 	m.register <- inputID
 	return func(b phono.Buffer) error {
 		select {
 		case m.in <- &inMessage{inputID: inputID, Buffer: b}:
 			return nil
 		case <-m.cancel:
-			return phono.ErrInterrupted
+			return io.ErrClosedPipe
 		}
 	}, nil
 }
@@ -113,13 +112,13 @@ func (m *Mixer) isOutput(sourceID string) bool {
 }
 
 // Pump returns a pump function which allows to read the out channel.
-func (m *Mixer) Pump(outputID string) (phono.PumpFunc, error) {
+func (m *Mixer) Pump(outputID string) (func() (phono.Buffer, error), error) {
 	m.outputID.Store(outputID)
 	return func() (phono.Buffer, error) {
 		// receive new buffer
 		f, ok := <-m.out
 		if !ok {
-			return nil, phono.ErrEOP
+			return nil, io.EOF
 		}
 		return f.sum(m.numChannels, m.bufferSize), nil
 	}, nil

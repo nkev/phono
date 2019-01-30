@@ -6,22 +6,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dudk/phono"
-	"github.com/dudk/phono/mock"
-	"github.com/dudk/phono/pipe"
+	"github.com/pipelined/phono/mock"
+	"github.com/pipelined/phono/pipe"
 	"go.uber.org/goleak"
 )
 
 const (
-	bufferSize                  = 512
-	sampleRate phono.SampleRate = 44100
+	bufferSize = 512
+	sampleRate = 44100
 )
 
 var measureTests = struct {
 	interval time.Duration
 	mock.Limit
-	phono.BufferSize
-	phono.NumChannels
+	BufferSize  int
+	NumChannels int
 }{
 	interval:    10 * time.Millisecond,
 	Limit:       10,
@@ -159,16 +158,16 @@ func TestLeaks(t *testing.T) {
 // This is a constructor of test pipe
 func newPipe(t *testing.T) *pipe.Pipe {
 	pump := &mock.Pump{
-		UID:         phono.NewUID(),
+		// UID:         phono.NewUID(),
 		Limit:       5,
 		Interval:    10 * time.Microsecond,
 		BufferSize:  10,
 		NumChannels: 1,
 	}
-	proc1 := &mock.Processor{UID: phono.NewUID()}
-	proc2 := &mock.Processor{UID: phono.NewUID()}
-	sink1 := &mock.Sink{UID: phono.NewUID()}
-	sink2 := &mock.Sink{UID: phono.NewUID()}
+	proc1 := &mock.Processor{}
+	proc2 := &mock.Processor{}
+	sink1 := &mock.Sink{}
+	sink2 := &mock.Sink{}
 
 	p, err := pipe.New(
 		sampleRate,

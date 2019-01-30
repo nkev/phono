@@ -6,18 +6,17 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/dudk/phono"
-	"github.com/dudk/vst2"
+	"github.com/pipelined/phono"
+	"github.com/pipelined/vst2"
 )
 
 // Processor represents vst2 sound processor
 type Processor struct {
-	phono.UID
 	plugin *vst2.Plugin
 
-	bufferSize    phono.BufferSize
-	numChannels   phono.NumChannels
-	sampleRate    phono.SampleRate
+	bufferSize    int
+	numChannels   int
+	sampleRate    int
 	tempo         float32
 	timeSignature vst2.TimeSignature
 
@@ -25,9 +24,8 @@ type Processor struct {
 }
 
 // NewProcessor creates new vst2 processor.
-func NewProcessor(plugin *vst2.Plugin, bufferSize phono.BufferSize, sampleRate phono.SampleRate, numChannels phono.NumChannels) *Processor {
+func NewProcessor(plugin *vst2.Plugin, bufferSize int, sampleRate int, numChannels int) *Processor {
 	return &Processor{
-		UID:             phono.NewUID(),
 		plugin:          plugin,
 		currentPosition: 0,
 		bufferSize:      bufferSize,
@@ -37,7 +35,7 @@ func NewProcessor(plugin *vst2.Plugin, bufferSize phono.BufferSize, sampleRate p
 }
 
 // Process returns processor function with default settings initialized.
-func (p *Processor) Process(string) (phono.ProcessFunc, error) {
+func (p *Processor) Process(string) (func(phono.Buffer) (phono.Buffer, error), error) {
 	p.plugin.SetCallback(p.callback())
 	p.plugin.SetBufferSize(int(p.bufferSize))
 	p.plugin.SetSampleRate(int(p.sampleRate))

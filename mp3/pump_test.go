@@ -3,15 +3,14 @@ package mp3_test
 import (
 	"testing"
 
-	"github.com/dudk/phono"
-	"github.com/dudk/phono/mp3"
-	"github.com/dudk/phono/pipe"
-	"github.com/dudk/phono/test"
+	"github.com/pipelined/phono/mp3"
+	"github.com/pipelined/phono/pipe"
+	"github.com/pipelined/phono/test"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPump(t *testing.T) {
-	bufferSize := phono.BufferSize(512)
+	bufferSize := 512
 	pump, err := mp3.NewPump(test.Data.Mp3, bufferSize)
 	assert.Nil(t, err)
 	sampleRate := pump.SampleRate()

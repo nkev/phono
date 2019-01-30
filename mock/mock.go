@@ -1,9 +1,10 @@
 package mock
 
 import (
+	"io"
 	"time"
 
-	"github.com/dudk/phono"
+	"github.com/pipelined/phono"
 )
 
 // Param types
@@ -14,74 +15,59 @@ type (
 
 // Pump mocks a pipe.Pump interface.
 type Pump struct {
-	phono.UID
 	counter
 	Interval time.Duration
 	Limit
-	Value float64
-	phono.BufferSize
-	phono.NumChannels
+	Value       float64
+	BufferSize  int
+	NumChannels int
 }
 
 // Sink mocks up a pipe.Sink interface.
 // Buffer is not thread-safe, so should not be checked while pipe is running.
 type Sink struct {
-	phono.UID
 	counter
 	phono.Buffer
 }
 
 // Processor mocks a pipe.Processor interface.
 type Processor struct {
-	phono.UID
 	counter
 }
 
 // IntervalParam pushes new interval value for pump.
-func (m *Pump) IntervalParam(i time.Duration) phono.Param {
-	return phono.Param{
-		ID: m.ID(),
-		Apply: func() {
-			m.Interval = i
-		},
+func (m *Pump) IntervalParam(i time.Duration) func() {
+	return func() {
+		m.Interval = i
 	}
 }
 
 // LimitParam pushes new limit value for pump.
-func (m *Pump) LimitParam(l Limit) phono.Param {
-	return phono.Param{
-		ID: m.ID(),
-		Apply: func() {
-			m.Limit = l
-		},
+func (m *Pump) LimitParam(l Limit) func() {
+	return func() {
+		m.Limit = l
 	}
 }
 
 // ValueParam pushes new signal value for pump.
-func (m *Pump) ValueParam(v float64) phono.Param {
-	return phono.Param{
-		ID: m.ID(),
-		Apply: func() {
-			m.Value = v
-		},
+func (m *Pump) ValueParam(v float64) func() {
+	return func() {
+		m.Value = v
 	}
 }
 
 // NumChannelsParam pushes new number of channels for pump
-func (m *Pump) NumChannelsParam(nc phono.NumChannels) phono.Param {
-	return phono.Param{
-		ID: m.ID(),
-		Apply: func() {
-			m.NumChannels = nc
-		},
+func (m *Pump) NumChannelsParam(numChannels int) func() {
+	return func() {
+		m.NumChannels = numChannels
 	}
 }
 
 // Pump returns new buffer for pipe.
-func (m *Pump) Pump(string) (phono.PumpFunc, error) {
+func (m *Pump) Pump(string) (func() (phono.Buffer, error), error) {
 	return func() (phono.Buffer, error) {
 		if Limit(m.Messages()) >= m.Limit {
-			return nil, phono.ErrEOP
+			return nil, io.EOF
 		}
 		time.Sleep(m.Interval)
 
@@ -104,7 +90,7 @@ func (m *Pump) Reset(string) error {
 }
 
 // Process implementation for runner
-func (m *Processor) Process(string) (phono.ProcessFunc, error) {
+func (m *Processor) Process(string) (func(phono.Buffer) (phono.Buffer, error), error) {
 	return func(b phono.Buffer) (phono.Buffer, error) {
 		m.Advance(b)
 		return b, nil
@@ -118,7 +104,7 @@ func (m *Processor) Reset(string) error {
 }
 
 // Sink implementation for runner.
-func (m *Sink) Sink(string) (phono.SinkFunc, error) {
+func (m *Sink) Sink(string) (func(phono.Buffer) error, error) {
 	return func(b phono.Buffer) error {
 		m.Buffer = m.Buffer.Append(b)
 		m.Advance(b)
@@ -141,22 +127,22 @@ func (c *counter) reset() {
 // counter counts messages and samples.
 // Duration is not zero only in context of measure.
 type counter struct {
-	messages int64
-	samples  int64
+	messages int
+	samples  int
 }
 
 // Advance counter's metrics.
 func (c *counter) Advance(buf phono.Buffer) {
 	c.messages++
-	c.samples = c.samples + int64(buf.Size())
+	c.samples = c.samples + buf.Size()
 }
 
 // Count returns messages and samples metrics.
-func (c *counter) Count() (int64, int64) {
+func (c *counter) Count() (int, int) {
 	return c.messages, c.samples
 }
 
 // Messages returns messages metrics.
-func (c *counter) Messages() int64 {
+func (c *counter) Messages() int {
 	return c.messages
 }
